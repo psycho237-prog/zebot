@@ -5,7 +5,7 @@ const pino = require('pino');
 const fs = require('fs');
 const path = require('path');
 const tar = require('tar');
-const db = require('./database');
+const db = require('./database.cjs');
 
 const startTime = new Date();
 
