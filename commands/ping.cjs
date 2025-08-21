@@ -1,3 +1,4 @@
+// commands/ping.cjs
 module.exports = {
     name: 'ping',
     adminOnly: false,
