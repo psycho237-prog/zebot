@@ -1,17 +1,33 @@
-// index.js
 const express = require('express');
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
-const qrcode = require("qrcode-terminal");
+const qrcode = require("qrcode");
 const pino = require("pino");
 const fs = require("fs");
 const path = require("path");
+const tar = require("tar"); // 👈 pour extraire ton auth_info.tar.xz
 const db = require('./database');
 const startTime = new Date();
 
 const AUTH_FOLDER = path.join(__dirname, "auth_info");
-const PREFIX = "!";
+const PREFIX = "/";   // 👈 nouveau préfixe
 const BOT_NAME = "PSYCHO BOT";
 const BOT_TAG = `*${BOT_NAME}* 👨🏻‍💻`;
+
+let lastQr = null; // stockage QR pour Railway
+
+// --- Décompression automatique si auth_info.tar.xz existe ---
+const tarPath = path.join(__dirname, "auth_info.tar.xz");
+if (fs.existsSync(tarPath) && !fs.existsSync(AUTH_FOLDER)) {
+    console.log("[Auth] Décompression de auth_info.tar.xz...");
+    tar.x({
+        file: tarPath,
+        C: __dirname // extrait dans le dossier du projet
+    }).then(() => {
+        console.log("[Auth] Décompression terminée ✅");
+    }).catch(err => {
+        console.error("[Auth] Erreur de décompression :", err);
+    });
+}
 
 // --- Loader de commandes ---
 const commands = new Map();
@@ -56,10 +72,8 @@ async function startBot() {
     sock.ev.on("connection.update", async (update) => {
         const { connection, lastDisconnect, qr } = update;
         if (qr) {
-            console.log("------------------------------------------------");
-            qrcode.generate(qr, { small: true });
-            console.log("[QR Code] Scannez ce code avec WhatsApp.");
-            console.log("------------------------------------------------");
+            lastQr = await qrcode.toDataURL(qr);
+            console.log("[QR Code] Nouveau QR disponible sur /qr");
         }
         if (connection === "close") {
             const shouldReconnect = lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut;
@@ -67,6 +81,7 @@ async function startBot() {
             if (shouldReconnect) startBot();
         } else if (connection === "open") {
             console.log("✅ Bot WhatsApp connecté avec succès !");
+            lastQr = null; // plus besoin du QR
         }
     });
 
@@ -91,14 +106,12 @@ async function startBot() {
         const command = commands.get(commandName);
         if (!command) return;
 
-        // --- Bloc try/catch pour chaque commande ---
         try {
             const isGroup = remoteJid.endsWith('@g.us');
             if (command.adminOnly) {
                 if (!isGroup) return replyWithTag(sock, remoteJid, msg, "⛔ Commande réservée aux groupes.");
                 
                 const groupMetadata = await sock.groupMetadata(remoteJid);
-                
                 const botId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
                 const botInGroup = groupMetadata.participants.find(p => p.id === botId);
                 const botIsAdmin = botInGroup?.admin === 'admin' || botInGroup?.admin === 'superadmin';
@@ -118,32 +131,33 @@ async function startBot() {
             await db.incrementCommandCount(senderId);
 
         } catch (err) {
-            console.error('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
-            console.error(`[ERREUR FATALE] Un crash a eu lieu dans la commande "${commandName}"`);
-            console.error('Message de l\'erreur:', err.message);
-            console.error('Stack de l\'erreur:', err.stack);
-            console.error('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
-            
+            console.error(`[ERREUR] Crash dans la commande "${commandName}":`, err);
             try {
-                await replyWithTag(sock, remoteJid, msg, "❌ Oups ! Une erreur critique est survenue. Le développeur a été notifié.");
-            } catch (replyError) {
-                console.error('[ERREUR FATALE] Impossible même de répondre à l\'utilisateur. Erreur:', replyError.message);
-            }
+                await replyWithTag(sock, remoteJid, msg, "❌ Oups ! Une erreur critique est survenue.");
+            } catch {}
         }
-    });
-
-    sock.ev.on('group-participants.update', async (update) => {
-        // Ici tu peux gérer l'accueil des nouveaux membres si tu veux
     });
 }
 
 // --- Serveur web ---
 const app = express();
 const PORT = process.env.PORT || 3000;
+
 app.get('/', (req, res) => {
-    res.send({ status: "online", botName: BOT_NAME, uptime: (new Date() - startTime) / 1000 });
+    res.send({ 
+        status: "online", 
+        botName: BOT_NAME, 
+        uptime: (new Date() - startTime) / 1000 
+    });
 });
+
+// Endpoint pour afficher le QR (base64)
+app.get('/qr', (req, res) => {
+    if (!lastQr) return res.send("✅ Bot déjà connecté ou QR non généré.");
+    res.send(`<img src="${lastQr}" />`);
+});
+
 app.listen(PORT, () => {
-    console.log(`[WebServer] Serveur web démarré et à l'écoute sur le port ${PORT}`);
+    console.log(`[WebServer] Serveur web démarré sur le port ${PORT}`);
     startBot();
 });
