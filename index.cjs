@@ -1,27 +1,28 @@
 const express = require('express');
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
-const qrcode = require("qrcode");
-const pino = require("pino");
-const fs = require("fs");
-const path = require("path");
-const tar = require("tar");
+const qrcode = require('qrcode');
+const pino = require('pino');
+const fs = require('fs');
+const path = require('path');
+const tar = require('tar');
 const db = require('./database');
+
 const startTime = new Date();
 
-const AUTH_FOLDER = path.join(__dirname, "auth_info");
-const PREFIX = "/";   
-const BOT_NAME = "PSYCHO BOT";
+const AUTH_FOLDER = path.join(__dirname, 'auth_info');
+const PREFIX = '/';
+const BOT_NAME = 'PSYCHO BOT';
 const BOT_TAG = `*${BOT_NAME}* 👨🏻‍💻`;
 
 let lastQr = null;
 
-// --- Décompression automatique de auth_info.tar.xz ---
-const tarPath = path.join(__dirname, "auth_info.tar.xz");
+// --- Décompression automatique auth_info.tar.xz ---
+const tarPath = path.join(__dirname, 'auth_info.tar.xz');
 if (fs.existsSync(tarPath) && !fs.existsSync(AUTH_FOLDER)) {
-    console.log("[Auth] Décompression de auth_info.tar.xz...");
+    console.log('[Auth] Décompression de auth_info.tar.xz...');
     tar.x({ file: tarPath, C: __dirname })
-       .then(() => console.log("[Auth] Décompression terminée ✅"))
-       .catch(err => console.error("[Auth] Erreur :", err));
+       .then(() => console.log('[Auth] Décompression terminée ✅'))
+       .catch(err => console.error('[Auth] Erreur :', err));
 }
 
 // --- Loader de commandes ---
@@ -47,39 +48,46 @@ function replyWithTag(sock, jid, quoted, text) {
 
 function getMessageText(msg) {
     const m = msg.message;
-    if (!m) return "";
-    return m.conversation || m.extendedTextMessage?.text || m.imageMessage?.caption || m.videoMessage?.caption || "";
+    if (!m) return '';
+    return m.conversation || m.extendedTextMessage?.text || m.imageMessage?.caption || m.videoMessage?.caption || '';
 }
 
 // --- Démarrage du bot ---
 async function startBot() {
-    console.log("Démarrage du bot WhatsApp...");
+    console.log('Démarrage du bot WhatsApp...');
     const { version } = await fetchLatestBaileysVersion();
     const { state, saveCreds } = await useMultiFileAuthState(AUTH_FOLDER);
 
-    const sock = makeWASocket({ version, auth: state, logger: pino({ level: "silent" }) });
+    const sock = makeWASocket({
+        version,
+        auth: state,
+        logger: pino({ level: 'silent' }),
+    });
 
-    sock.ev.on("connection.update", async (update) => {
+    sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
         if (qr) {
             lastQr = await qrcode.toDataURL(qr);
-            console.log("[QR Code] Nouveau QR disponible sur /qr");
+            console.log('[QR Code] Nouveau QR disponible sur /qr');
         }
-        if (connection === "close") {
+        if (connection === 'close') {
             const shouldReconnect = lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut;
             if (shouldReconnect) startBot();
-        } else if (connection === "open") lastQr = null;
+        } else if (connection === 'open') lastQr = null;
     });
 
-    sock.ev.on("creds.update", saveCreds);
+    sock.ev.on('creds.update', saveCreds);
 
-    sock.ev.on("messages.upsert", async ({ messages, type }) => {
-        if (type !== "notify" || !messages[0]?.message) return;
+    sock.ev.on('messages.upsert', async ({ messages, type }) => {
+        if (type !== 'notify' || !messages[0]?.message) return;
         const msg = messages[0];
         const remoteJid = msg.key.remoteJid;
-        const senderId = msg.key.fromMe ? sock.user.id.split(':')[0] + '@s.whatsapp.net' : (remoteJid.endsWith('@g.us') ? msg.key.participant : remoteJid);
+        const senderId = msg.key.fromMe
+            ? sock.user.id.split(':')[0] + '@s.whatsapp.net'
+            : (remoteJid.endsWith('@g.us') ? msg.key.participant : remoteJid);
 
-        await db.getOrRegisterUser(senderId, msg.pushName || "Unknown");
+        await db.getOrRegisterUser(senderId, msg.pushName || 'Unknown');
+
         const messageContent = getMessageText(msg);
         if (!messageContent?.startsWith(PREFIX)) return;
 
@@ -92,13 +100,13 @@ async function startBot() {
 
         try {
             const isGroup = remoteJid.endsWith('@g.us');
-            if (command.adminOnly && !isGroup) return replyWithTag(sock, remoteJid, msg, "⛔ Commande réservée aux groupes.");
+            if (command.adminOnly && !isGroup) return replyWithTag(sock, remoteJid, msg, '⛔ Commande réservée aux groupes.');
             console.log(`[EXECUTION] Commande "${commandName}" par ${senderId}`);
             await command.run({ sock, msg, args, replyWithTag, commands, db, startTime });
             await db.incrementCommandCount(senderId);
         } catch (err) {
             console.error(`[ERREUR] Commande "${commandName}":`, err);
-            try { await replyWithTag(sock, remoteJid, msg, "❌ Une erreur critique est survenue."); } catch {}
+            try { await replyWithTag(sock, remoteJid, msg, '❌ Une erreur critique est survenue.'); } catch {}
         }
     });
 }
@@ -106,6 +114,6 @@ async function startBot() {
 // --- Serveur web ---
 const app = express();
 const PORT = process.env.PORT || 3000;
-app.get('/', (req, res) => res.send({ status:"online", botName:BOT_NAME, uptime:(new Date()-startTime)/1000 }));
-app.get('/qr', (req, res) => res.send(lastQr ? `<img src="${lastQr}" />` : "✅ Bot déjà connecté ou QR non généré."));
+app.get('/', (req, res) => res.send({ status: 'online', botName: BOT_NAME, uptime: (new Date() - startTime) / 1000 }));
+app.get('/qr', (req, res) => res.send(lastQr ? `<img src="${lastQr}" />` : '✅ Bot déjà connecté ou QR non généré.'));
 app.listen(PORT, () => { console.log(`[WebServer] Port ${PORT}`); startBot(); });
