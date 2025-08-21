@@ -1,9 +1,9 @@
 {
   "name": "psycho-bot",
   "version": "1.0.0",
-  "type": "module",
+  "type": "commonjs",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.cjs"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^6.17.16",
