@@ -17,7 +17,7 @@ module.exports = {
     adminOnly: false,
     run: async ({ sock, msg, db, startTime, replyWithTag }) => {
         const BOT_NAME = "PSYCHO BOT";
-        const PREFIX = ".";
+        const PREFIX = "-";
         const userCount = await db.getTotalUsers();
         const commandCount = await db.getTotalCommands();
         const uptimeString = formatUptime(Date.now() - startTime);
@@ -39,3 +39,4 @@ module.exports = {
         await replyWithTag(sock, remoteJid, msg, infoText);
     }
 };
+
