@@ -1,11 +1,9 @@
 const log = require('../logger')(module);
+
 module.exports = {
     name: 'help',
     description: "Affiche le menu d'aide du bot.",
-    run: async ({ sock, msg, commands }) => {
-        if (!sock.user) {
-            return;
-        }
+    run: async ({ sock, msg, commands, replyWithTag }) => {
         const BOT_NAME = "PSYCHO BOT";
         const PREFIX = ".";
         const remoteJid = msg.key.remoteJid;
@@ -15,7 +13,6 @@ module.exports = {
         helpText += `│  Voici mes commandes disponibles :\n`;
 
         const availableCommands = Array.from(commands.values()).filter(c => c.name !== 'help');
-
         if (availableCommands.length > 0) {
             availableCommands.forEach(command => {
                 helpText += `│\n│  ◈ \`${PREFIX}${command.name}\`\n│     ↳ _${command.description}_\n`;
@@ -23,10 +20,6 @@ module.exports = {
         }
         helpText += `│\n╰───≼ XYBERCLAN ≽───╯`;
 
-        try {
-            // Utiliser sock.sendMessage directement pour un rendu parfait.
-            await sock.sendMessage(remoteJid, { text: helpText }, { quoted: msg });
-        } catch(e) {
-        }
+        await replyWithTag(sock, remoteJid, msg, helpText);
     }
 };
