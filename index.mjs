@@ -1,9 +1,8 @@
-// index.cjs
 import { default as makeWASocket, useMultiFileAuthState, DisconnectReason } from '@whiskeysockets/baileys';
 import fs from 'fs';
 import path from 'path';
 import express from 'express';
-import logFactory from './logger.cjs';
+import logFactory from './logger.mjs';
 
 // --- Logger ---
 const log = logFactory(module);
@@ -17,18 +16,18 @@ app.listen(PORT, () => log(`Serveur web actif sur le port ${PORT}`));
 // --- Auth ---
 const { state, saveCreds } = await useMultiFileAuthState('./auth_info');
 
-// --- Fichier de commandes ---
+// --- Charger les commandes ---
 const commands = new Map();
 const commandsPath = path.join('./commands');
 fs.readdirSync(commandsPath).forEach(file => {
-    if (file.endsWith('.cjs')) {
-        const command = require(path.join(commandsPath, file));
-        commands.set(command.name, command);
-        log(`Commande chargée : ${command.name}`);
+    if (file.endsWith('.mjs')) {
+        const command = await import(path.join(commandsPath, file));
+        commands.set(command.default.name, command.default);
+        log(`Commande chargée : ${command.default.name}`);
     }
 });
 
-// --- DB factice (évite crash sur info) ---
+// --- DB factice ---
 const db = {
     getTotalUsers: async () => 0,
     getTotalCommands: async () => commands.size
@@ -40,7 +39,7 @@ const sock = makeWASocket({
     printQRInTerminal: true
 });
 
-// Sauvegarde automatique des credentials
+// --- Sauvegarde auto des credentials ---
 sock.ev.on('creds.update', saveCreds);
 
 // --- Gestion messages ---
@@ -49,11 +48,10 @@ sock.ev.on('messages.upsert', async ({ messages }) => {
     if (!msg.message || msg.key.fromMe) return;
 
     const body = msg.message.conversation || msg.message?.extendedTextMessage?.text || '';
-    const PREFIX = '-'; // <-- nouveau préfixe
-    if (!body.startsWith(PREFIX)) return;
+    if (!body.startsWith('-')) return;
 
     const args = body.trim().split(/ +/);
-    const cmdName = args.shift().slice(PREFIX.length).toLowerCase();
+    const cmdName = args.shift().slice(1).toLowerCase();
 
     const command = commands.get(cmdName);
     if (!command) return;
@@ -61,16 +59,16 @@ sock.ev.on('messages.upsert', async ({ messages }) => {
     log(`[EXECUTION] Tentative d'exécution de la commande "${cmdName}" par ${msg.key.remoteJid}`);
 
     try {
-        await command.run({ 
-            sock, 
-            msg, 
-            args, 
-            commands, 
-            db, 
-            startTime: Date.now(), 
+        await command.run({
+            sock,
+            msg,
+            args,
+            commands,
+            db,
+            startTime: Date.now(),
             replyWithTag: async (sock, jid, msg, text) => {
                 await sock.sendMessage(jid, { text }, { quoted: msg });
-            } 
+            }
         });
         log(`[EXECUTION] Succès de la commande "${cmdName}"`);
     } catch (err) {
