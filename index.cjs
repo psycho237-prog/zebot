@@ -9,7 +9,7 @@ const db = require('./database.cjs'); // Assurez-vous que database est en .cjs
 const startTime = new Date();
 
 const AUTH_FOLDER = path.join(__dirname, "auth_info");
-const PREFIX = "!";
+const PREFIX = "-";
 const BOT_NAME = "PSYCHO BOT";
 const BOT_TAG = `*${BOT_NAME}* 👨🏻‍💻`;
 
