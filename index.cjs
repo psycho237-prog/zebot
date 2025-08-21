@@ -1,26 +1,15 @@
-// --- Modules nécessaires ---
+// index.cjs
 const express = require('express');
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
 const qrcode = require("qrcode-terminal");
 const pino = require("pino");
 const fs = require("fs");
 const path = require("path");
-const { execSync } = require("child_process");
-const db = require('./database.cjs'); // Assure-toi que database est en .cjs
+const db = require('./database.cjs'); // Assurez-vous que database est en .cjs
 const startTime = new Date();
 
-// --- Auth folder ---
 const AUTH_FOLDER = path.join(__dirname, "auth_info");
-
-// --- Décompresse auth_info.zip si le dossier n'existe pas ---
-if (!fs.existsSync(AUTH_FOLDER) && fs.existsSync(AUTH_FOLDER + ".zip")) {
-    console.log('[Auth] Décompression de auth_info.zip...');
-    execSync(`unzip ${AUTH_FOLDER}.zip -d ${__dirname}`);
-    console.log('[Auth] Décompression terminée !');
-}
-
-// --- Prefix et bot info ---
-const PREFIX = "/";
+const PREFIX = ".";
 const BOT_NAME = "PSYCHO BOT";
 const BOT_TAG = `*${BOT_NAME}* 👨🏻‍💻`;
 
@@ -29,7 +18,7 @@ const commands = new Map();
 const commandFolder = path.join(__dirname, 'commands');
 if (!fs.existsSync(commandFolder)) fs.mkdirSync(commandFolder);
 
-const commandFiles = fs.readdirSync(commandFolder).filter(file => file.endsWith('.cjs'));
+const commandFiles = fs.readdirSync(commandFolder).filter(file => file.endsWith('.cjs')); // <- ici on prend .cjs
 for (const file of commandFiles) {
     try {
         const command = require(path.join(commandFolder, file));
@@ -102,12 +91,14 @@ async function startBot() {
         const command = commands.get(commandName);
         if (!command) return;
 
+        // --- Bloc try/catch pour chaque commande ---
         try {
             const isGroup = remoteJid.endsWith('@g.us');
             if (command.adminOnly) {
                 if (!isGroup) return replyWithTag(sock, remoteJid, msg, "⛔ Commande réservée aux groupes.");
                 
                 const groupMetadata = await sock.groupMetadata(remoteJid);
+                
                 const botId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
                 const botInGroup = groupMetadata.participants.find(p => p.id === botId);
                 const botIsAdmin = botInGroup?.admin === 'admin' || botInGroup?.admin === 'superadmin';
@@ -142,7 +133,7 @@ async function startBot() {
     });
 
     sock.ev.on('group-participants.update', async (update) => {
-        // Accueil des nouveaux membres si tu veux
+        // Ici tu peux gérer l'accueil des nouveaux membres si tu veux
     });
 }
 
